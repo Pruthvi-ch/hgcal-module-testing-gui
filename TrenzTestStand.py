@@ -73,12 +73,12 @@ class TrenzTestStand:
         self.fw = ''
         if density == 'L':
             if shape in ['F', 'L', 'R']:
-                self.fw = 'hexaboard-hd-tester-v1p1-trophy-v3'
+                self.fw = 'hexaboard-hd-tester-v2p0-trophy-v3'
             else: # T B 5
                 raise NotImplementedError
         elif density == 'H':
             if shape == 'F' or shape == 'B':
-                self.fw = 'hexaboard-hd-tester-v1p1-trophy-v2'
+                self.fw = 'hexaboard-hd-tester-v2p0-trophy-v2'
             else: # L R T 5
                 raise NotImplementedError
 
@@ -103,6 +103,18 @@ class TrenzTestStand:
         and then checks to ensure that the correct channels are discovered. Currently only implemented for LD full boards.
         Returns True if proper startup detected, otherwise returns False.
         """
+
+        ssh_stdout, ssh_stderr = self._runcmd(f'kconn_pwr on')
+        stdout = ssh_stdout.read().decode('ascii')
+
+        for line in stdout.split('\n'):
+            print('   >> fw:', line)
+
+        ssh_stdout, ssh_stderr = self._runcmd(f'firewall-cmd --add-port=5555/tcp --add-port=6000/tcp --add-port=8888/tcp --add-port=8080/tcp')
+        stdout = ssh_stdout.read().decode('ascii')
+
+        for line in stdout.split('\n'):
+            print('   >> fw:', line)
 
         ssh_stdout, ssh_stderr = self._runcmd(f'fw-loader load {self.fw} && listdevice')
         stdout = ssh_stdout.read().decode('ascii')
@@ -249,6 +261,9 @@ class TrenzTestStand:
         """
 
         print(' >> TrenzTestStand: Shutting down the Trenz test stand')
-        ssh_stdout, ssh_stderr = self._runcmd('shutdown now')
+        ssh_stdout, ssh_stderr = self._runcmd(f'kconn_pwr off')
+        time.sleep(1)
+
+        ssh_stdout, ssh_stderr = self._runcmd(f'init 0')
         time.sleep(5)
         return ssh_stdout.readlines(), ssh_stderr.readlines()

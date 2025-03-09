@@ -2,25 +2,25 @@ import yaml
 
 config_dict = {'DebugMode': True,
                'DefaultFontSize': '15', # 15 works well for 1920x1080 screens
-               'TestingPCOpSys': 'Centos7', # or 'Alma9'
+               'TestingPCOpSys': 'Alma9', # or 'Alma9'
                'HexactrlSWBranch': 'ROCv3', # gitlab branch of `hexactrl-sw`, should be 'ROCv3' for most. If you updated to Alma 9 some time ago (but not recently), use 'feature-alma9' instead.
-               'TrenzHostname': ['cmshgcaltb4.lan.local.cmu.edu'],
+               'TrenzHostname': ['158.144.54.126'],
                'MACSerial': 'CM',
-               'DataLoc': '/home/hgcal/data/', # place to store all output data
-               'HVResource': 'ASRL/dev/ttyUSB0::INSTR',
+               'DataLoc': '/home/hgcroc/data/', # place to store all output data
+               'HVResource': 'TCPIP::158.144.54.104::5025::SOCKET',
                'HVDiscoveryMode': 'by-resource', # if you use something like the above; use 'by-id' if instead of the /dev/ location you use the link shown by `ls -l /dev/serial/by-id`
-               'HVTerminal': 'Rear', # 'Front' for front terminals, 'Rear' for rear terminals
+               'HVTerminal': 'Front', # 'Front' for front terminals, 'Rear' for rear terminals
                'HVWiresPolarization': 'Reverse', # 'Reverse' for reverse bias (V in [0, 800]) 'Forward' for forward bias (V in [-800, 0])
-               'PCKeyLoc': '/home/hgcal/.ssh/id_rsa', # private key location
+               'PCKeyLoc': '/home/hgcroc/.ssh/id_rsa', # private key location
                'HasHVSwitch': True, # switch on the box which only allows HV when switch is triggered
                'HasRHSensor': False, # automatic sensing of RH and T inside test box, see AirControl.py. You may want to re-implement it.
-               'Inspectors': ['acrobert', 'simurthy', 'jestein', 'ppalit', 'akallilt'], # CERN usernames
+               'Inspectors': ['pruthvi'], # CERN usernames
                'HasLocalDB': True,
                # these four only if you have a local database
-               'DBHostname': '', # fill out
+               'DBHostname': '158.144.55.183', # fill out
                'DBDatabase': 'hgcdb',
                'DBUsername': 'teststand_user',
-               'DBPassword': ''  # fill out
+               'DBPassword': 'hgcal'  # fill out
                }
 
 import os

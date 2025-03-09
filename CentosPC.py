@@ -36,7 +36,7 @@ class CentosPC:
         
         self.initiated = False
         # start the DAQ client
-        os.system('systemctl restart daq-client.service')
+        #os.system('systemctl restart daq-client.service')
         print(' >> CentosPC: DAQ client started. PC ready to run tests.')
 
         # in Centos7 or Alma9 branch ROCv3, stick to main path of environment and scripts
@@ -56,12 +56,16 @@ class CentosPC:
 
         elif (configuration['TestingPCOpSys'] == 'Alma9') and (configuration['HexactrlSWBranch'] == 'ROCv3'):
             self.env = '/opt/hexactrl/ROCv3/ctrl/etc/env.sh'
-            self.scriptloc = '/opt/hexactrl/ROCv3/ctrl/'
+            self.env2 = '/home/hgcroc/Documents/hexactrl-script/etc/env.sh'  # used to set environment from local version of python scripts
+            #self.scriptloc = '/opt/hexactrl/ROCv3/ctrl/' # Global location of python scripts, can be updated using "sudo yum update hexactrl-sw-rocv3" 
+            self.scriptloc = '/home/hgcroc/Documents/hexactrl-script/' # Location of local scripts remove after updating hexactrl-sw-rocv3
 
         # make sure above files exist
         assert os.path.isfile(f'{self.env}')
         assert os.path.isfile(f'{self.scriptloc}pedestal_run.py')
-            
+       
+        print(' >> CentosPC: DAQ client started. PC ready to run tests2.')
+
         density = self.modulename.split('-')[1][1]
         shape = self.modulename.split('-')[2][0]
         rocvers = self.modulename.split('-')[2][-1] # -1 so works for hexaboards and live modules
@@ -99,6 +103,7 @@ class CentosPC:
                 raise NotImplementedError
 
         # copy to current directory to update it safely while trimming
+        print(f'cp {self.config} current_config.yaml')
         os.system(f'cp {self.config} current_config.yaml')
         print(f' >> CentosPC: copying {self.config} to current directory as current_config.yaml')
         self.config = 'current_config.yaml'
@@ -121,7 +126,7 @@ class CentosPC:
 
         print(' >> CentosPC: systemctl restart daq-client.service')
         os.system('systemctl restart daq-client.service')
-        sleep(1)
+        sleep(20)
         print(' >> CentosPC: systemctl status daq-client')
         stdout = os.popen('systemctl status daq-client').read().split('\n')
         client = False
@@ -173,11 +178,14 @@ class CentosPC:
         script = self.scriptloc + scriptname + '.py'
 
         print(f' >> CentosPC: Running {scriptname}.py with config {config}...')
-
+        print(f'python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I')
         if not self.initiated:
-            os.system(f'source {self.env} && python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I > /dev/null 2>&1')
+            #os.system(f'source {self.env}; source {self.env2}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I > /dev/null 2>&1')
+            os.system(f'source {self.env}; source {self.env2}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I') # comment after updating hexactrl-sw-rocv3
+            #os.system(f'source {self.env}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I > /dev/null 2>&1') # uncomment after updating hexactrl-sw-rocv3
         else:
-            os.system(f'source {self.env} && python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} > /dev/null 2>&1')
+            os.system(f'source {self.env}; source {self.env2}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut}') # comment after updating hexactrl-sw-rocv3
+            #os.system(f'source {self.env}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut}') # uncomment after updating hexactrl-sw-rocv3
         runs = glob.glob(f'{configuration["DataLoc"]}/{self.outdir}/{scriptname}/*')
             
         runs.sort()
@@ -200,7 +208,7 @@ class CentosPC:
         """
         Runs the pedestal_run.py script and then, if the bias voltage isn't None, renames the output dir to include the bias voltage.
         """
-        
+        print(f' >> CentosPC: Start Pedestal Run')
         dirname = self._run_script('pedestal_run')
         return dirname
         
@@ -316,7 +324,9 @@ def check_hexactrl_sw():
 
     elif (configuration['TestingPCOpSys'] == 'Alma9') and (configuration['HexactrlSWBranch'] == 'ROCv3'):
         env = '/opt/hexactrl/ROCv3/ctrl/etc/env.sh'
-        scriptloc = '/opt/hexactrl/ROCv3/ctrl/'
+        #self.env2 = '/home/hgcroc/Documents/hexactrl-script/etc/env.sh'
+        #self.scriptloc = '/opt/hexactrl/ROCv3/ctrl/'
+        scriptloc = '/home/hgcroc/Documents/hexactrl-script/'
 
     # make sure above files exist                                                                                                                                                                              
     assert os.path.isfile(f'{env}')

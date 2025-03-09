@@ -1,9 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import PySimpleGUI as sg
+from pymeasure.instruments.keithley import Keithley2450
+from pymeasure.adapters import Adapter, SerialAdapter, VISAAdapter
 from TrenzTestStand import TrenzTestStand
 from CentosPC import CentosPC, check_hexactrl_sw
-from Keithley2410 import Keithley2410
+from Keithley2410 import Keithley2470
 from time import sleep
 import os
 import traceback
@@ -389,11 +391,11 @@ def connect_HV(state):
             update_state(state, 'ps', ps)
         else:
             try:
-                ps = Keithley2410()
+                ps = Keithley2470() 
             except ValueError:
                 # try again if the Keithley has some stored errors
                 # if the errors are still there, don't try again
-                ps = Keithley2410()
+                ps = Keithley2470()
             update_state(state, 'ps', ps)
         keith.close()
     
@@ -411,7 +413,7 @@ def check_leakage_current(state):
     leakage_current = {} #{0: None, 1: None, 10: None, 100: None, 300: None, 600: None}
     # best to set the keys in the dict according to bias direction
     # and then use those keys
-    for vltg in [0, 1, 10, 100, 300]: 
+    for vltg in [0, 1, 10, 100, 300, 500, 700, 800, 900]: 
         if configuration['HVWiresPolarization'] == 'Forward':
             leakage_current[-vltg] = None
         else:
@@ -427,19 +429,33 @@ def check_leakage_current(state):
             sleep(5)
         else:
             state['ps'].outputOn()
+            #state['ps'].disable_source()
+            #sleep(3)
+
+            #state['ps'].apply_voltage()
+            #state['ps'].compliance_current = 0.01
+            #state['ps'].source_voltage = 0             # Sets the source current to 0 mA
+            #state['ps'].enable_source()
+
             update_state(state, '-HV-Output-On-', True, 'green')
             
             for key in leakage_current.keys():
-        
+                #state['ps'].ramp_to_voltage(key)          # Ramps the current to 5 mA
+                #state['ps'].enable_source()                # Enables the source output
+                #sleep(20)
+                #state['ps'].measure_current()              # Sets up to measure voltage
+                #current = state['ps'].current
+
                 state['ps'].setVoltage(key)
                 _, current, _ = state['ps'].measureCurrentLoop()
                 leakage_current[key] = current
-                print('  >> Checking leakage current:', key, current*1000000.)
+                #print('  >> Checking leakage current:', key, current*1000000.)
                 if np.abs(current)*1000000. > 1. and abs(key) < 500:
                     nominal = False
                     break
         
             state['ps'].outputOff()
+            #state['ps'].disable_source()
             update_state(state, '-HV-Output-On-', False, 'black')
         
         ivprobe.close()
@@ -725,7 +741,7 @@ def scan_vref(state, BV):
         state['pc'].vrefinv_scan()
     vref.close()
 
-def take_IV_curve(state, step=10):
+def take_IV_curve(state, step=100):
     """
     Takes an IV curve automatically using the power supply object. The range is assumed to be 0-900V
     and the default step is 20V. If the RH argument is not zero, it prompts the user to enter the ambient
