@@ -558,6 +558,7 @@ class Keithley2470:
             resistance = voltage / current
 
             data.append([vltg, voltage, np.abs(current), resistance])
+            print("The data is ", vltg, voltage, np.abs(current),resistance)
 
         self.display_string('Loop finished.')
         print(' >> Keithley2410: Loop finished')

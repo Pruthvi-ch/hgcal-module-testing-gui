@@ -844,8 +844,9 @@ def plot_IV_curves(state):
         fig, ax = plt.subplots(figsize=(16, 12))
         for datadict in state['ps'].IVdata:
             data = datadict['data']
-            plt.plot(data[:,1], data[:,2], 'o-', label=f"{datadict['RH']}% RH; {datadict['Temp']}ºC")
-        
+            plt.plot(abs(data[:,1]), data[:,2], 'o-', label=f"{datadict['RH']}% RH; {datadict['Temp']}ºC")
+            print("The values are", data[:,1],"and", data[:,2])
+
         outdir = state['-Output-Subdir-']
 
         ax.set_yscale('log')
@@ -853,7 +854,7 @@ def plot_IV_curves(state):
         ax.set_xlabel('Bias Voltage [V]')
         ax.set_ylabel(r'Leakage Current [A]')
         ax.set_ylim(1e-9, 1e-03)
-        ax.set_xlim(0, 900)
+        ax.set_xlim(0, 950)
         ax.legend()
 
         # dynamically name file to avoid overwriting plots

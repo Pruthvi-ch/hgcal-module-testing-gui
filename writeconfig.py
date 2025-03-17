@@ -10,7 +10,7 @@ config_dict = {'DebugMode': True,
                'HVResource': 'TCPIP::158.144.54.104::5025::SOCKET',
                'HVDiscoveryMode': 'by-resource', # if you use something like the above; use 'by-id' if instead of the /dev/ location you use the link shown by `ls -l /dev/serial/by-id`
                'HVTerminal': 'Front', # 'Front' for front terminals, 'Rear' for rear terminals
-               'HVWiresPolarization': 'Reverse', # 'Reverse' for reverse bias (V in [0, 800]) 'Forward' for forward bias (V in [-800, 0])
+               'HVWiresPolarization': 'Forward', # 'Reverse' for reverse bias (V in [0, 800]) 'Forward' for forward bias (V in [-800, 0])
                'PCKeyLoc': '/home/hgcroc/.ssh/id_rsa', # private key location
                'HasHVSwitch': True, # switch on the box which only allows HV when switch is triggered
                'HasRHSensor': False, # automatic sensing of RH and T inside test box, see AirControl.py. You may want to re-implement it.
