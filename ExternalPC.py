@@ -16,9 +16,9 @@ sys.path.insert(1, './hexmap')
 from plot_summary import make_hexmap_plots_from_file
 import plot_summary
 
-class CentosPC:
+class ExternalPC: # no longer Centos7
     """
-    Class that wraps the role of the Centos7 PC in module testing. It starts and tracks the DAQ client service 
+    Class that wraps the role of the Testing PC in module testing. It starts and tracks the DAQ client service 
     and runs the testing scripts.
     """    
     
@@ -36,8 +36,8 @@ class CentosPC:
         
         self.initiated = False
         # start the DAQ client
-        #os.system('systemctl restart daq-client.service')
-        print(' >> CentosPC: DAQ client started. PC ready to run tests.')
+        os.system('systemctl restart daq-client.service')
+        print(' >> ExternalPC: DAQ client started. PC ready to run tests.')
 
         # in Centos7 or Alma9 branch ROCv3, stick to main path of environment and scripts
         # in feature-alma9 branch, use specific paths
@@ -56,16 +56,12 @@ class CentosPC:
 
         elif (configuration['TestingPCOpSys'] == 'Alma9') and (configuration['HexactrlSWBranch'] == 'ROCv3'):
             self.env = '/opt/hexactrl/ROCv3/ctrl/etc/env.sh'
-            self.env2 = '/home/hgcroc/Documents/hexactrl-script/etc/env.sh'  # used to set environment from local version of python scripts
-            #self.scriptloc = '/opt/hexactrl/ROCv3/ctrl/' # Global location of python scripts, can be updated using "sudo yum update hexactrl-sw-rocv3" 
-            self.scriptloc = '/home/hgcroc/Documents/hexactrl-script/' # Location of local scripts remove after updating hexactrl-sw-rocv3
+            self.scriptloc = '/opt/hexactrl/ROCv3/ctrl/'
 
         # make sure above files exist
         assert os.path.isfile(f'{self.env}')
         assert os.path.isfile(f'{self.scriptloc}pedestal_run.py')
-       
-        print(' >> CentosPC: DAQ client started. PC ready to run tests2.')
-
+            
         density = self.modulename.split('-')[1][1]
         shape = self.modulename.split('-')[2][0]
         rocvers = self.modulename.split('-')[2][-1] # -1 so works for hexaboards and live modules
@@ -78,34 +74,48 @@ class CentosPC:
             if shape == 'F':
                 if rocvers == 'X':
                     self.config = f'{self.scriptloc}etc/configs/initLD-trophyV3.yaml'
-                elif rocvers == '2' or rocvers == 'B' or rocvers == '4':
+                elif rocvers in ['2', 'B', '4', 'C']:
                     self.config = f'{self.scriptloc}etc/configs/initLD-trophyV3-3b.yaml'
-            elif shape == 'L' or shape == 'R':
-                if rocvers == '2' or rocvers == 'B' or rocvers == '4':
+            elif shape == 'L' or shape == 'R' or shape == 'T':
+                if rocvers in ['2', 'B', '4', 'C']:
                     self.config = f'{self.scriptloc}etc/configs/initLD-semi-V3b.yaml'
                 elif rocvers == 'X':
                     self.config = f'{self.scriptloc}etc/configs/initLD-semi.yaml'
+            elif shape == 'B':
+                if rocvers in ['2', 'B', '4', 'C']:
+                    self.config = f'{self.scriptloc}etc/configs/initLD-bottom-3b.yaml'
+                elif rocvers == 'X':
+                    raise NotImplementedError
             elif shape == '5':
                 if rocvers == 'X':
                     raise NotImplementedError
-                self.config = f'{self.scriptloc}etc/configs/initLD-five-3b.yaml'
-            else: # T B
-                raise NotImplementedError
+                elif rocvers in ['2', 'B', '4', 'C']:
+                    self.config = f'{self.scriptloc}etc/configs/initLD-five-3b.yaml'
         elif density == 'H':
             if shape == 'F':
-                if rocvers == '2' or rocvers == 'B' or rocvers == '4':
+                if rocvers in ['2', 'B', '4', 'C']:
                     self.config = f'{self.scriptloc}etc/configs/initHD_trophyV3-V3b.yaml'
                 elif rocvers == 'X':
                     self.config = f'{self.scriptloc}etc/configs/initHD_trophyV3.yaml'
-            elif shape == 'B' and rocvers == 'X':
-                self.config = f'{self.scriptloc}etc/configs/initHD-bottom.yaml'
-            else: # L R T 5
-                raise NotImplementedError
+            elif shape == 'B':
+                if rocvers == 'X':
+                    self.config = f'{self.scriptloc}etc/configs/initHD-bottom.yaml'
+                else: # no V3b bottom yet
+                    raise NotImplementedError
+            elif shape == 'R' or shape == 'L':
+                if rocvers in ['2', 'B', '4', 'C']:
+                    self.config = f'{self.scriptloc}etc/configs/initHD-semi-V3b.yaml'
+                elif rocvers == 'X':
+                    raise NotImplementedError
+            elif shape == 'T':
+                if rocvers in ['2', 'B', '4', 'C']:
+                    self.config = f'{self.scriptloc}etc/configs/initHD-top-V3b.yaml'
+                elif rocvers == 'X':
+                    raise NotImplementedError
 
         # copy to current directory to update it safely while trimming
-        print(f'cp {self.config} current_config.yaml')
         os.system(f'cp {self.config} current_config.yaml')
-        print(f' >> CentosPC: copying {self.config} to current directory as current_config.yaml')
+        print(f' >> ExternalPC: copying {self.config} to current directory as current_config.yaml')
         self.config = 'current_config.yaml'
 
         self.outyaml = {'pedestal_scan': 'trimmed_pedestal.yaml', 'sampling_scan': 'best_phase.yaml',
@@ -124,19 +134,19 @@ class CentosPC:
         Restarts DAQ client service by running a bash command, then checks the status and returns it.
         """
 
-        print(' >> CentosPC: systemctl restart daq-client.service')
+        print(' >> ExternalPC: systemctl restart daq-client.service')
         os.system('systemctl restart daq-client.service')
-        sleep(20)
-        print(' >> CentosPC: systemctl status daq-client')
+        sleep(1)
+        print(' >> ExternalPC: systemctl status daq-client')
         stdout = os.popen('systemctl status daq-client').read().split('\n')
         client = False
         for line in stdout:
             if 'Active: active (running)' in line:
-                print(' >> CentosPC: DAQ client running')
+                print(' >> ExternalPC: DAQ client running')
                 client = True
 
         if not client:
-            print(' -- CentosPC: Error in DAQ client')
+            print(' -- ExternalPC: Error in DAQ client')
 
         return client
         
@@ -145,16 +155,16 @@ class CentosPC:
         Checks the status of the DAQ client and returns it.
         """
 
-        print(' >> CentosPC: systemctl status daq-client')
+        print(' >> ExternalPC: systemctl status daq-client')
         stdout = os.popen('systemctl status daq-client').read().split('\n')
         client = False
         for line in stdout:
             if 'Active: active (running)' in line:
-                print(' >> CentosPC: DAQ client running')
+                print(' >> ExternalPC: DAQ client running')
                 client = True
                 
         if not client:
-            print(' -- CentosPC: Error in DAQ client')
+            print(' -- ExternalPC: Error in DAQ client')
         return client
 
     def _run_script(self, scriptname, config=None):
@@ -177,38 +187,57 @@ class CentosPC:
         
         script = self.scriptloc + scriptname + '.py'
 
-        print(f' >> CentosPC: Running {scriptname}.py with config {config}...')
-        print(f'python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I')
+        print(f' >> ExternalPC: Running {scriptname}.py with config {config}...')
+
         if not self.initiated:
-            #os.system(f'source {self.env}; source {self.env2}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I > /dev/null 2>&1')
-            os.system(f'source {self.env}; source {self.env2}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I') # comment after updating hexactrl-sw-rocv3
-            #os.system(f'source {self.env}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I > /dev/null 2>&1') # uncomment after updating hexactrl-sw-rocv3
+            os.system(f'source {self.env} && python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I > /dev/null 2>&1')
         else:
-            os.system(f'source {self.env}; source {self.env2}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut}') # comment after updating hexactrl-sw-rocv3
-            #os.system(f'source {self.env}; python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut}') # uncomment after updating hexactrl-sw-rocv3
+            os.system(f'source {self.env} && python3 {script} -i {self.trenzhostname} -f {config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} > /dev/null 2>&1')
         runs = glob.glob(f'{configuration["DataLoc"]}/{self.outdir}/{scriptname}/*')
             
         runs.sort()
         try:
-            print(f' >> CentosPC: Output of {scriptname}.py located in {runs[-1]}')
+            print(f' >> ExternalPC: Output of {scriptname}.py located in {runs[-1]}')
             self.initiated = True
         except:
-            print(f' >> CentosPC: Did not find output of test. Maybe it crashed? Continuing')
+            print(f' >> ExternalPC: Did not find output of test. Maybe it crashed? Continuing')
             return ''
             
         if scriptname in self.outyaml.keys():
-            print(f' >> CentosPC: Updating configuration file with {runs[-1]}/{self.outyaml[scriptname]}')
+            print(f' >> ExternalPC: Updating configuration file with {runs[-1]}/{self.outyaml[scriptname]}')
             updateconf(self.config, runs[-1]+'/'+self.outyaml[scriptname])
             
         thisrun = runs[-1].split('/')[-1]
         #return f'{scriptname}/{thisrun}'
         return runs[-1]
-        
+
+    def create_proc(self, scriptname):
+            
+        script = self.scriptloc + scriptname + '.py'
+
+        if not self.initiated:
+            command = f'source {self.env} && python3 {script} -i {self.trenzhostname} -f {self.config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} -I > /dev/null 2>&1'
+        else:
+            command = f'source {self.env} && python3 {script} -i {self.trenzhostname} -f {self.config} -o {configuration["DataLoc"]}/{self.basedir}/ -d {self.dut} > /dev/null 2>&1'
+
+        proc = ScriptProcess(scriptname, command, self)
+        return proc
+
+    def pedestal_proc(self, BV=None):
+
+        proc = self.create_proc('pedestal_run')
+        return proc
+
+    def script_proc(self, script, BV=None):
+
+        proc = self.create_proc(script)
+        return proc
+
     def pedestal_run(self, BV=None):
         """
         Runs the pedestal_run.py script and then, if the bias voltage isn't None, renames the output dir to include the bias voltage.
         """
-        print(f' >> CentosPC: Start Pedestal Run')
+        
         dirname = self._run_script('pedestal_run')
         return dirname
         
@@ -303,7 +332,7 @@ def updateconf(conffile, updfile):
         with open(conffile,'w') as filenew:
             yaml_string=yaml.dump(conf, filenew)
     else:
-        print(' >> CentosPC: did not find output yaml file {updfile}, maybe it crashed? Continuing')
+        print(' >> ExternalPC: did not find output yaml file {updfile}, maybe it crashed? Continuing')
 
 def check_hexactrl_sw():
 
@@ -324,10 +353,61 @@ def check_hexactrl_sw():
 
     elif (configuration['TestingPCOpSys'] == 'Alma9') and (configuration['HexactrlSWBranch'] == 'ROCv3'):
         env = '/opt/hexactrl/ROCv3/ctrl/etc/env.sh'
-        #self.env2 = '/home/hgcroc/Documents/hexactrl-script/etc/env.sh'
-        #self.scriptloc = '/opt/hexactrl/ROCv3/ctrl/'
-        scriptloc = '/home/hgcroc/Documents/hexactrl-script/'
+        scriptloc = '/opt/hexactrl/ROCv3/ctrl/'
 
     # make sure above files exist                                                                                                                                                                              
     assert os.path.isfile(f'{env}')
     assert os.path.isfile(f'{scriptloc}pedestal_run.py')
+
+
+# Class to handle detached test script processes running on the PC 
+class ScriptProcess:
+
+    def __init__(self, scriptname, command, pc):
+
+        self.pc = pc
+        self.command = command
+        self.scriptname = scriptname
+
+        print(f' >> ExternalPC: Running {self.scriptname}.py with config {self.pc.config}...')
+
+        self.proc = subprocess.Popen(self.command, shell=True, executable="/bin/bash")
+
+    def is_finished(self):
+
+        isfin = self.proc.poll()
+
+        if isfin is None:
+            return False
+        elif isfin == 0:
+            return True
+        else:
+            print(f' >> ExternalPC: Issue encountered in test. Ending test sequence...')
+            #raise RuntimeError
+            return True
+            
+    def end_test(self):
+
+        terminated = False
+        if not self.is_finished:
+            terminated = True
+            self.proc.terminate()
+
+        runs = glob.glob(f'{configuration["DataLoc"]}/{self.pc.outdir}/{self.scriptname}/*')
+        runs.sort()
+
+        try:
+            print(f' >> ExternalPC: Output of {self.scriptname}.py located in {runs[-1]}')
+            self.pc.initiated = True
+        except:
+            print(f' >> ExternalPC: Did not find output of test. Maybe it crashed? Continuing')
+            return ''
+
+        if self.scriptname in self.pc.outyaml.keys() and not terminated:
+            print(f' >> ExternalPC: Updating configuration file with {runs[-1]}/{self.pc.outyaml[self.scriptname]}')
+            updateconf(self.pc.config, runs[-1]+'/'+self.pc.outyaml[self.scriptname])
+
+        thisrun = runs[-1].split('/')[-1]
+        #return f'{scriptname}/{thisrun}'
+        return runs[-1]
+

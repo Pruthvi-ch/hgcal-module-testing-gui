@@ -1,15 +1,20 @@
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import PySimpleGUI as sg
-from pymeasure.instruments.keithley import Keithley2450
-from pymeasure.adapters import Adapter, SerialAdapter, VISAAdapter
-from TrenzTestStand import TrenzTestStand
-from CentosPC import CentosPC, check_hexactrl_sw
-from Keithley2410 import Keithley2470
-from time import sleep
+from FPGATestStand import FPGATestStand
+from ExternalPC import ExternalPC, check_hexactrl_sw
+from Keithley2410 import Keithley2410
+from time import sleep, time
 import os
 import traceback
+import multiprocessing, signal
+from multiprocessing import Process, Manager, active_children
 from datetime import datetime
+
+mpl.rcParams.update(mpl.rcParamsDefault)
+font = {"size": 20}
+mpl.rc("font", **font)
 
 import yaml
 configuration = {}
@@ -17,7 +22,7 @@ with open('configuration.yaml', 'r') as file:
     configuration = yaml.safe_load(file)
 
 if configuration['HasLocalDB']:
-    from DBTools import pedestal_upload, iv_upload, plots_upload, other_test_upload
+    from DBTools import pedestal_upload, iv_upload, plots_upload, other_test_upload, fetch_sensor_iv, readout_info, iv_info, assembly_info, fetch_comments, serial_remove_dashes
 
 from DBTools import add_RH_T, iv_save
 
@@ -89,8 +94,8 @@ def end_session(state):
     system. In general, shutting it down broadly follows five steps:
         - Disabling the HV power
         - De-powering the DCDC or Low Voltage Supply
-        - Shutting down the Trenz
-        - De-powering the Trenz
+        - Shutting down the FPGA
+        - De-powering the FPGA
         - Disconnecting all of the parts and the module
     """
 
@@ -98,11 +103,13 @@ def end_session(state):
     density = state['-Module-Serial-'].split('-')[1][1]
     shape = state['-Module-Serial-'].split('-')[2][0]
     if density == 'L':
-        if shape not in ['F', 'L', 'R']:
+        if shape not in ['F', 'L', 'R', 'T', 'B', '5']:
             raise NotImplementedError
     elif density == 'H':
-        if shape not in ['F', 'B']:
+        if shape not in ['F', 'B', 'L', 'T', 'R']:
             raise NotImplementedError
+    # enabled for all because nothing in this function is shape or geometry dependent
+    # beside dcdc for LF
                             
     ending = waiting_window("Ending session...")
     sleep(2)
@@ -135,6 +142,13 @@ def end_session(state):
                         update_state(state, '-DAQ-Server-', False, 'black')
                         update_state(state, '-I2C-Server-', False, 'black')
                         update_state(state, '-Hexactrl-Accessed-', False, 'black')
+
+                    # new open_box call b/c for the kria have to open box to flip switch
+                    open_box(state)
+
+                    if state['-FPGA-Type-'] == 'Kria':
+                        do_something_window("Turn off Kria hexacontroller power switch", "Switched Off")
+                        update_state(state, '-Hexactrl-Powered-', False, 'black')
                         
                     do_something_window("Disconnect hexacontroller power"+(" (blue)" if configuration['MACSerial'] == 'CM' else ''), "Disconnected")
                     update_state(state, '-Hexactrl-Powered-', False, 'black')
@@ -205,15 +219,16 @@ def initial_module_checks(state):
     density = state['-Module-Serial-'].split('-')[1][1]
     shape = state['-Module-Serial-'].split('-')[2][0]
     if density == 'L':
-        if shape not in ['F', 'L', 'R', 'T', '5']:
-            raise NotImplementedError # B
+        if shape not in ['F', 'L', 'R', 'T', '5', 'B']:
+            raise NotImplementedError
     elif density == 'H':
         if shape not in ['F', 'B', 'T', 'L', 'R']:
-            raise NotImplementedError # 5
+            raise NotImplementedError 
 
     # check hexactrl-sw location now
     try:
-        check_hexactrl_sw()
+        if not state['-Debug-Mode-']:
+            check_hexactrl_sw()
     except AssertionError:
         ending = waiting_window("Can't find hexactrl-sw on PC. Exiting...", title="Error on PC")
         sleep(2)
@@ -234,7 +249,7 @@ def initial_module_checks(state):
     if density == 'L':
         if shape == 'F':
             thesepads = pads_LF
-        elif shape == 'R' or shape == 'L' or shape == 'T' or shape == '5':
+        elif shape in ['R', 'L', 'T', 'B', '5']:
             thesepads = pads_LR_LL
     if density == 'H':
         if shape == 'F':
@@ -245,6 +260,8 @@ def initial_module_checks(state):
             thesepads = pads_HT
         elif shape == 'L':
             thesepads = pads_HL
+        elif shape == 'R':
+            thesepads = pads_HR
             
     if not state['-Skip-Checks-']:
         layout = [[sg.Text("Use multimeter to check hexaboard resistances for shorts", font="Any 15")]]
@@ -301,7 +318,7 @@ def initial_module_checks(state):
         colright = []
         idx = 2
         for pad in thesepads:
-            expect = '1.2-1.25V' if '1V2' in pad else '1.47-1.5V'
+            expect = '1.18-1.25V' if '1V2' in pad else '1.47-1.5V'
             colleft.append([sg.Text(f"{pad}:")])
             colright.append([sg.Text(f"(expect {expect})"), sg.Radio('Correct', idx, key=f"-{pad}-corr-"), sg.Radio('Incorrect', idx, key=f"-{pad}-incorr-")])
             idx += 1
@@ -391,11 +408,11 @@ def connect_HV(state):
             update_state(state, 'ps', ps)
         else:
             try:
-                ps = Keithley2470() 
+                ps = Keithley2410()
             except ValueError:
                 # try again if the Keithley has some stored errors
                 # if the errors are still there, don't try again
-                ps = Keithley2470()
+                ps = Keithley2410()
             update_state(state, 'ps', ps)
         keith.close()
     
@@ -413,7 +430,7 @@ def check_leakage_current(state):
     leakage_current = {} #{0: None, 1: None, 10: None, 100: None, 300: None, 600: None}
     # best to set the keys in the dict according to bias direction
     # and then use those keys
-    for vltg in [0, 1, 10, 100, 300, 500, 700, 800, 900]: 
+    for vltg in [0, 1, 10, 100, 300]: 
         if configuration['HVWiresPolarization'] == 'Forward':
             leakage_current[-vltg] = None
         else:
@@ -429,38 +446,24 @@ def check_leakage_current(state):
             sleep(5)
         else:
             state['ps'].outputOn()
-            #state['ps'].disable_source()
-            #sleep(3)
-
-            #state['ps'].apply_voltage()
-            #state['ps'].compliance_current = 0.01
-            #state['ps'].source_voltage = 0             # Sets the source current to 0 mA
-            #state['ps'].enable_source()
-
             update_state(state, '-HV-Output-On-', True, 'green')
             
             for key in leakage_current.keys():
-                #state['ps'].ramp_to_voltage(key)          # Ramps the current to 5 mA
-                #state['ps'].enable_source()                # Enables the source output
-                #sleep(20)
-                #state['ps'].measure_current()              # Sets up to measure voltage
-                #current = state['ps'].current
-
+        
                 state['ps'].setVoltage(key)
                 _, current, _ = state['ps'].measureCurrentLoop()
                 leakage_current[key] = current
-                #print('  >> Checking leakage current:', key, current*1000000.)
+                print('  >> Checking leakage current:', key, current*1000000.)
                 if np.abs(current)*1000000. > 1. and abs(key) < 500:
                     nominal = False
                     break
         
             state['ps'].outputOff()
-            #state['ps'].disable_source()
             update_state(state, '-HV-Output-On-', False, 'black')
         
         ivprobe.close()
         
-        readout = [[sg.Text(f"{key} V Bias: {round(1000000.*leakage_current[key],3)} μA") if leakage_current[key] is not None else sg.Text(f"{key} V Bias: {None} μA")] for key in leakage_current.keys()]
+        readout = [[sg.Text(f"{abs(key)} V Bias: {round(1000000.*abs(leakage_current[key]),3)} μA") if leakage_current[key] is not None else sg.Text(f"{abs(key)} V Bias: {None} μA")] for key in leakage_current.keys()]
         
         title = "Module leakage current good" if nominal else "Module leakage current not nominal. Continue?"
         
@@ -481,11 +484,11 @@ def check_leakage_current(state):
         window.close()
     return 'CONT'
 
-def configure_test_stand(state, trenzhostname):
+def configure_test_stand(state, fpgahostname):
     """
     Guides the user through connecting the various boards and then handles the startup of the testing system. At
-    the moment, it assumes the DCDC has already been connected but is not powered. The Trenz test stand is added to
-    the `state` dictionary under the field 'ts' and the Centos PC object is added under the field 'pc'. If the objects
+    the moment, it assumes the DCDC has already been connected but is not powered. The FPGA test stand is added to
+    the `state` dictionary under the field 'ts' and the External PC object is added under the field 'pc'. If the objects
     detect errors in the firmware or services, the function returns 'END' after ending the sesion; if all succeed, 
     it returns 'CONT'.
     """
@@ -494,10 +497,10 @@ def configure_test_stand(state, trenzhostname):
     density = state['-Module-Serial-'].split('-')[1][1]
     shape = state['-Module-Serial-'].split('-')[2][0]
     if density == 'L':
-        if shape not in ['F', 'L', 'R']:
+        if shape not in ['F', 'L', 'R', 'T', 'B', '5']:
             raise NotImplementedError
     elif density == 'H':
-        if shape not in ['F', 'B']:
+        if shape not in ['F', 'B', 'T', 'L', 'R']:
             raise NotImplementedError
     else:
         raise NotImplementedError
@@ -509,17 +512,25 @@ def configure_test_stand(state, trenzhostname):
     do_something_window("Ensure NOTHING is powered", "No power")
     do_something_window("Connect trophy board and hexacontroller", "Connected", title='Connect Hexacontroller')
     update_state(state, '-Hexactrl-Connected-', True, 'green')
-    if state['-Live-Module-']:
-        close_box(state)
+
     do_something_window("Connect hexacontroller power cable"+(" (blue)" if configuration['MACSerial'] == 'CM' else ''), "Powered", title='Power Hexacontroller')
     update_state(state, '-Hexactrl-Powered-', True, 'green')
-    
-    connecting = waiting_window("Connecting to hexacontroller...", description=f'ssh root@{trenzhostname}')
+
+    if state['-FPGA-Type-'] == 'Kria':
+        update_state(state, '-Hexactrl-Powered-', False, 'black')
+        do_something_window("Turn on Kria hexacontroller power switch", "Powered", title='Switch On Hexacontroller')
+        update_state(state, '-Hexactrl-Powered-', True, 'green')
+
+    # now have close box after powering on test stand b/c kria has a switch
+    if state['-Live-Module-']:
+        close_box(state)
+
+    connecting = waiting_window("Connecting to hexacontroller...", description=f'ssh root@{fpgahostname}')
     if state['-Debug-Mode-']:
         sleep(5)
         ts = None
     else:
-        ts = TrenzTestStand(trenzhostname, state['-Module-Serial-']) # will take some time if the Trenz was just powered
+        ts = FPGATestStand(fpgahostname, state['-Module-Serial-'], fpgatype=state['-FPGA-Type-']) # will take some time if the FPGA was just powered
     connecting.close()
     update_state(state, '-Hexactrl-Accessed-', True, 'green')
     update_state(state, 'ts', ts)
@@ -552,7 +563,7 @@ def configure_test_stand(state, trenzhostname):
     update_state(state, '-DAQ-Server-', services, 'green' if services else 'red')
     update_state(state, '-I2C-Server-', services, 'green' if services else 'red')
     if not services:
-        ending = waiting_window("Error in Trenz services. Exiting...", title="Error in Services")
+        ending = waiting_window("Error in FPGA services. Exiting...", title="Error in Services")
         sleep(2)
         ending.close()
         end_session(state)
@@ -564,7 +575,7 @@ def configure_test_stand(state, trenzhostname):
         sleep(5)
     else:
         try:
-            pc = CentosPC(trenzhostname, state) # automatically starts daq client
+            pc = ExternalPC(fpgahostname, state) # automatically starts daq client
         except AssertionError:
             ending = waiting_window("Can't find hexactrl-sw on PC. Exiting...", title="Error on PC")
             sleep(2)
@@ -586,21 +597,51 @@ def run_pedestals(state, BV):
     Runs pedestals via the PC and then makes hexmap plots. If the module is live, sets the bias voltage 
     according to the BV argument.
     """
-    
-    pedestals = waiting_window(f"Running Pedestals (BV={BV})...", description='python3 pedestal_run.py [options...]')
-    
+
+    status = 'RUN'
+
+    layout = [[sg.Text(f"Running Pedestals (BV={BV})...", font=lgfont)],
+              [sg.Text('python3 pedestal_run.py [options...]')],
+              [sg.Button('Terminate Test')]]
+    pedestals = sg.Window(f"Module Test: Running Pedestals (BV={BV})", layout, margins=(200,100))
+
+    event, values = pedestals.read(timeout=100)
+
     if state['-Debug-Mode-']:
         sleep(5)
         hexpath = ''
     else:
+
+        if BV is not None:
+            BV = float(BV)
+            BV_to_use = BV
+            if configuration['HVWiresPolarization'] == 'Forward':
+                BV_to_use = -BV
+        else:
+            BV_to_use = BV
+            
         if state['-Live-Module-'] and BV is not None:
             if not state['ps'].get_output():
                 state['ps'].outputOn()
                 update_state(state, '-HV-Output-On-', True, 'green')
-            state['ps'].setVoltage(float(BV))
+            state['ps'].setVoltage(float(BV_to_use))
 
-        pedestalpath = state['pc'].pedestal_run(BV=BV)
+        #pedestalpath = state['pc'].pedestal_run(BV=BV)
+        # testing this detached test run
+        proc = state['pc'].pedestal_proc(BV=BV_to_use)
+        while not proc.is_finished():
+            event, values = pedestals.read(timeout=1)
+            if event == 'Terminate Test' or event == sg.WIN_CLOSED:
+                print(' >> InteractionGUI: calling TERMINATE on run_pedestals at user request')
+                status = 'TERM'
+                break
 
+        pedestalpath = proc.end_test()
+        if status == 'RUN':
+            status = 'CONT'
+        del proc
+
+        
         if state['-Live-Module-'] and BV is not None:
             _, current, _ = state['ps'].measureCurrentLoop()
             state['-Leakage-Current-'] = current
@@ -608,7 +649,7 @@ def run_pedestals(state, BV):
         # rename output directory with conditions of test
         trimmed = 'untrimmed' if '-Pedestals-Trimmed-' not in state.keys() else ('trimmed' if state['-Pedestals-Trimmed-'] == True else f'trimmed{state["-Pedestals-Trimmed-"]}')
         if BV is not None:
-            testtag = f'BV{BV}_RH{state["-Box-RH-"]}_T{state["-Box-T-"]}_{trimmed}'
+            testtag = f'BV{int(BV)}_RH{state["-Box-RH-"]}_T{state["-Box-T-"]}_{trimmed}'
         else:
             testtag = trimmed
         
@@ -617,90 +658,191 @@ def run_pedestals(state, BV):
             os.system(f'mv {pedestalpath} {pedestalpath}_{testtag}')
         except:
             print(' -- InteractionGUI: pedestal run renaming failed')
+            print(f'    attempted: mv {pedestalpath} {pedestalpath}_{testtag}')
 
-        if configuration['HasLocalDB']:
+        if configuration['HasLocalDB'] and status == 'CONT':
             try:
                 pedestal_upload(state) # uploads pedestals to database
             except Exception:
                 print('  -- Pedestal upload exception:', traceback.format_exc())
 
-        hexpath = state['pc'].make_hexmaps(tag=testtag)
-        if configuration['HasLocalDB']:
+        if status == 'CONT':
+            hexpath = state['pc'].make_hexmaps(tag=testtag)
+        else:
+            hexpath = ''
+        if configuration['HasLocalDB'] and status == 'CONT':
             try:
                 plots_upload(state) # uploads pedestal plots to database
             except Exception:
                 print('  -- Plots upload exception:', traceback.format_exc())
 
     pedestals.close()
-    return hexpath
+    return hexpath, status
 
-def multi_run_pedestals(state, BV_list):
+def multi_run_pedestals(state, BV_list, showplots = True):
     """
     Runs multiple pedestal runs. If the module is not live, the argument BV_list is full of Nones.
     """
 
     hexpath = ''
     for BV in BV_list:
-        hexpath = run_pedestals(state, BV)
-    if not state['-Debug-Mode-'] and len(BV_list) > 0 and hexpath != '':
+        hexpath, status = run_pedestals(state, BV)
+        if status != 'CONT':
+            break
+    if not state['-Debug-Mode-'] and len(BV_list) > 0 and hexpath != '' and showplots:
         os.system(f'gio open {hexpath}_adc_mean.png')
         os.system(f'gio open {hexpath}_adc_stdd.png')
 
+    return status
+        
 def trim_pedestals(state, BV):
     """
     """
-    trimming = waiting_window(f"Trimming Pedestals (BV={BV})...", description='python3 pedestal_run.py [options...] && python3 pedestal_scan.py [options...] &&\npython3 vrefnoinv_scan.py [options...] && python3 vrefinv_scan.py [options...]')
+
+    status = 'RUN'
+
+    layout = [[sg.Text(f"Trimming Pedestals (BV={BV})...", font=lgfont)],
+              [sg.Text('python3 pedestal_run.py [options...] && python3 pedestal_scan.py [options...] &&\npython3 vrefnoinv_scan.py [options...] && python3 vrefinv_scan.py [options...]')],
+              [sg.Button('Terminate Trimming')]]
+    trimming = sg.Window(f"Module Test: Trimming Pedestals (BV={BV})", layout, margins=(200,100))
+
+    event, values = trimming.read(timeout=100)
+
     
     if state['-Debug-Mode-']:
         sleep(5)
     else:
+
+        if BV is not None:
+            BV = float(BV)
+            BV_to_use = BV
+            if configuration['HVWiresPolarization'] == 'Forward':
+                BV_to_use = -BV
+        else:
+            BV_to_use = BV
+
         if state['-Live-Module-'] and BV is not None:
             state['ps'].outputOn()
             update_state(state, '-HV-Output-On-', True, 'green')
-            state['ps'].setVoltage(float(BV))
-            
-        state['pc'].pedestal_run()
-        state['pc'].pedestal_scan()
-        state['pc'].vrefnoinv_scan()
-        state['pc'].vrefinv_scan()
+            state['ps'].setVoltage(float(BV_to_use))
 
-        if state['-Live-Module-'] and BV is not None:
-            _, current, _ = state['ps'].measureCurrentLoop()
-            state['-Leakage-Current-'] = current
+        proc = state['pc'].create_proc('pedestal_run')
+        while not proc.is_finished():
+            event, values = trimming.read(timeout=1)
+            if event == 'Terminate Trimming' or event == sg.WIN_CLOSED:
+                print(' >> InteractionGUI: calling TERMINATE on trim_pedestals at user request')
+                status = 'TERM'
+                break
 
-        if BV is None:
-            state['-Pedestals-Trimmed-'] = True
-        else:
-            state['-Pedestals-Trimmed-'] = BV
+        proc.end_test()
+        del proc
+
+        if status == 'RUN':
+            proc = state['pc'].create_proc('pedestal_scan')
+            while not proc.is_finished():
+                event, values = trimming.read(timeout=1)
+                if event == 'Terminate Trimming' or event == sg.WIN_CLOSED:
+                    print(' >> InteractionGUI: calling TERMINATE on trim_pedestals at user request')
+                    status = 'TERM'
+                    break
+
+            proc.end_test()
+            del proc
+
+        if status == 'RUN':
+            proc = state['pc'].create_proc('vrefnoinv_scan')
+            while not proc.is_finished():
+                event, values = trimming.read(timeout=1)
+                if event == 'Terminate Trimming' or event == sg.WIN_CLOSED:
+                    print(' >> InteractionGUI: calling TERMINATE on trim_pedestals at user request')
+                    status = 'TERM'
+                    break
+
+            proc.end_test()
+            del proc
+
+        if status == 'RUN':
+            proc = state['pc'].create_proc('vrefinv_scan')
+            while not proc.is_finished():
+                event, values = trimming.read(timeout=1)
+                if event == 'Terminate Trimming' or event == sg.WIN_CLOSED:
+                    print(' >> InteractionGUI: calling TERMINATE on trim_pedestals at user request')
+                    status = 'TERM'
+                    break
+
+            proc.end_test()
+            del proc
+
+        if status == 'RUN':
+            status = 'CONT'
+
+        if not status == 'TERM':
+            if state['-Live-Module-'] and BV is not None:
+                _, current, _ = state['ps'].measureCurrentLoop()
+                state['-Leakage-Current-'] = current
+
+            if BV is None:
+                state['-Pedestals-Trimmed-'] = True
+            else:
+                state['-Pedestals-Trimmed-'] = BV
 
     trimming.close()
-
+    return status
+    
 def run_other_script(script, state, BV):
     """
     """
-    running = waiting_window(f"Running {script}.py (BV={BV})...", description=f'python3 {script}.py [options...]')
+    status = 'RUN'
+
+    layout = [[sg.Text(f"Running Script {script} (BV={BV})...", font=lgfont)],
+              [sg.Text(f'python3 {script}.py [options...]')],
+              [sg.Button('Terminate Test')]]
+    scriptrun = sg.Window(f"Module Test: Running Script {script} (BV={BV})", layout, margins=(200,100))
+
+    event, values = scriptrun.read(timeout=100)
 
     if state['-Debug-Mode-']:
         sleep(5)
     else:
+
+        if BV is not None:
+            BV = float(BV)
+            BV_to_use = BV
+            if configuration['HVWiresPolarization'] == 'Forward':
+                BV_to_use = -BV
+        else:
+            BV_to_use = BV
+
         if state['-Live-Module-'] and BV is not None:
             state['ps'].outputOn()
             update_state(state, '-HV-Output-On-', True, 'green')
-            state['ps'].setVoltage(float(BV))
-        state['pc']._run_script(script)
+            state['ps'].setVoltage(float(BV_to_use))
+
+        proc = state['pc'].script_proc(script, BV=BV_to_use)
+        while not proc.is_finished():
+            event, values = scriptrun.read(timeout=1)
+            if event == 'Terminate Test' or event == sg.WIN_CLOSED:
+                print(' >> InteractionGUI: calling TERMINATE on run_other_script at user request')
+                status = 'TERM'
+                break
+
+        scriptpath = proc.end_test()
+        if status == 'RUN':
+            status = 'CONT'
+        del proc
 
         if state['-Live-Module-'] and BV is not None:
             _, current, _ = state['ps'].measureCurrentLoop()
             state['-Leakage-Current-'] = current
         
-        if configuration['HasLocalDB']:
+        if configuration['HasLocalDB'] and status == 'CONT':
             try:
                 other_test_upload(state, script, BV)            
             except Exception:
                 print('  -- Other test upload exception:', traceback.format_exc())
 
-
-    running.close()
+    scriptrun.close()
+    return status
 
 def scan_pedestals(state, BV):
     """
@@ -713,11 +855,20 @@ def scan_pedestals(state, BV):
     if state['-Debug-Mode-']:
         sleep(5)
     else:
+
+        if BV is not None:
+            BV = float(BV)
+            BV_to_use = BV
+            if configuration['HVWiresPolarization'] == 'Forward':
+                BV_to_use = -BV
+        else:
+            BV_to_use = BV
+
         if state['-Live-Module-'] and BV is not None:
             if not state['ps'].get_output():
                 state['ps'].outputOn()
                 update_state(state, '-HV-Output-On-', True, 'green')
-            state['ps'].setVoltage(float(BV))
+            state['ps'].setVoltage(float(BV_to_use))
         state['pc'].pedestal_run()
         state['pc'].pedestal_scan()
     pedestals.close()
@@ -733,17 +884,26 @@ def scan_vref(state, BV):
     if state['-Debug-Mode-']:
         sleep(5)
     else:
+
+        if BV is not None:
+            BV = float(BV)
+            BV_to_use = BV
+            if configuration['HVWiresPolarization'] == 'Forward':
+                BV_to_use = -BV
+        else:
+            BV_to_use = BV
+        
         if state['-Live-Module-'] and BV is not None:
             state['ps'].outputOn()
             update_state(state, '-HV-Output-On-', True, 'green')
-            state['ps'].setVoltage(float(BV))
+            state['ps'].setVoltage(float(BV_to_use))
         state['pc'].vrefnoinv_scan()
         state['pc'].vrefinv_scan()
     vref.close()
 
-def take_IV_curve(state, step=25):
+def take_IV_curve(state, step=10, maxV=500):
     """
-    Takes an IV curve automatically using the power supply object. The range is assumed to be 0-900V
+    Takes an IV curve automatically using the power supply object. The range is assumed to be 0-500V
     and the default step is 20V. If the RH argument is not zero, it prompts the user to enter the ambient
     humidity. We intend to query this automatically in the future but do not have the capability at the 
     moment.
@@ -751,9 +911,15 @@ def take_IV_curve(state, step=25):
      
     connect_HV(state) # will do nothing if already connected
     RH, Temp = add_RH_T(state, force=True) # also adds RH,T to state dict
-        
-    curvew = waiting_window(f'Taking IV curve...')
 
+    status = 'RUN'
+
+    layout = [[sg.Text(f"Taking IV curve...", font=lgfont)],
+              [sg.Button('Terminate Test')]]
+    curvew = sg.Window(f"Module Test: Taking IV Curve", layout, margins=(200,100))
+
+    event, values = curvew.read(timeout=100)
+    
     if state['-Debug-Mode-']:
        sleep(5)
     else:
@@ -762,21 +928,59 @@ def take_IV_curve(state, step=25):
             print(' >> HV switch not tripped - exiting. Please close box and try again.')
             return 'END'
         update_state(state, '-HV-Output-On-', True, 'green')
-        maxV = 600 if configuration['HVWiresPolarization'] == 'Reverse' else -600
+
         if configuration['HVWiresPolarization'] == 'Forward':
+            maxV = -maxV
             step = -step
-        curve = state['ps'].takeIVnew(maxV, step, RH, Temp) # IV curve is stored in the ps object so all curves can be plotted together
+            
+        # use multiprocessing to run IV curve in separate process
+        # output dict is shared between main proc and IV proc
+        manager = Manager()
+        curve = manager.dict()
+        curve_proc = Process(target=state['ps'].takeIVproc, args = [curve, maxV, step, RH, Temp, status])
+        curve_proc.start()
+                                         
+        while curve_proc.is_alive():
+            event, values = curvew.read(timeout=1)
+            if event == 'Terminate Test' or event == sg.WIN_CLOSED:
+                print(' >> InteractionGUI: calling TERMINATE on take_IV_curve at user request')
+                curve_proc.terminate()
+                status = 'TERM'
+                break
+
+        sleep(0.5)        
+        curve_proc.join()
+
+        # Append data into IVdata:
+        if status == 'RUN':
+            state['ps'].IVdata.append(curve)
+            status = 'CONT'
+        else:
+            # Clear queues: Error queue and Out queue
+            state['ps'].clear_queue()
+
+            # Reset the Keithley 
+            state['ps']._write("STATus:PRESet")
+
+            # Reset Voltage
+            v_now, _, _ = state['ps'].measureVoltage()
+            state['ps'].voltage_now = v_now
+            state['ps'].setVoltage(0.)
+
+            state['ps'].outputOff()
+            
         update_state(state, '-HV-Output-On-', False, 'black')
 
-        if configuration['HasLocalDB']:
+        if configuration['HasLocalDB'] and status == 'CONT':
             try:
                 iv_upload(curve, state) # saves IV curve as pickle object and uploads to local db
             except Exception:
                 print('  -- IV upload exception:', traceback.format_exc())
-        else:
+        elif status == 'CONT':
             iv_save(curve, state) # saves IV curve as pickle object
-    curvew.close()
-    return 'CONT'
+        curvew.close()
+
+    return status
         
 def restart_services(state):
     """
@@ -787,11 +991,12 @@ def restart_services(state):
     if not (state['-DCDC-Connected-'] and state['-DCDC-Powered-'] and state['-Hexactrl-Powered-'] and state['-Hexactrl-Accessed-'] and state['-FW-Loaded-']):
         return
     
-    starting = waiting_window("Restarting services on test stand...", title="Starting Services...", description='systemctl restart daq-server && systemctl restart i2c-server')
+    starting = waiting_window("Reloading firmware and restarting services on test stand...", title="Starting Services...", description='systemctl restart daq-server && systemctl restart i2c-server')
     if state['-Debug-Mode-']:
         sleep(5)
         services = True
     else:
+        services = state['ts'].loadfw()
         services = state['ts'].startservers()
     starting.close()
     update_state(state, '-DAQ-Server-', services, 'green' if services else 'black')
@@ -844,19 +1049,47 @@ def plot_IV_curves(state):
         fig, ax = plt.subplots(figsize=(16, 12))
         for datadict in state['ps'].IVdata:
             data = datadict['data']
-            plt.plot(abs(data[:,1]), data[:,2], 'o-', label=f"{datadict['RH']}% RH; {datadict['Temp']}ºC")
-            print("The values are", data[:,1],"and", data[:,2])
-
+            plt.plot(data[:,1], data[:,2], 'o-', label=f"{datadict['RH']}% RH; {datadict['Temp']}ºC")
+        
+        # add sensor IV to plot if in DB
+        try:
+            v0, i0, di0 = fetch_sensor_iv(state["-Module-Serial-"])
+            i0 *= 1e-9
+            di0 *= 1e-9
+            ax.plot(np.abs(v0), np.abs(i0), 'o-', label='Bare Sensor', color = 'grey')
+            ax.fill_between(np.abs(v0), np.abs(i0)-di0, np.abs(i0)+di0, color = 'grey', alpha = 0.15)
+        except Exception:
+            print("  -- InteractionGUI: can't add sensor IV;", traceback.format_exc())
+            
         outdir = state['-Output-Subdir-']
 
         ax.set_yscale('log')
         ax.set_title(f'{state["-Module-Serial-"]} module IV Curve Set {datadict["date"]}')
-        ax.set_xlabel('Bias Voltage [V]')
+        ax.set_xlabel('Reverse Bias [V]')
         ax.set_ylabel(r'Leakage Current [A]')
-        ax.set_ylim(1e-9, 1e-02)
-        ax.set_xlim(0, 950)
+        ax.set_ylim(1e-9, 1e-03)
+        ax.set_xlim(0, 900)
         ax.legend()
 
+        # add grading info to plot
+        try:
+            v = data[:,0]
+            # old IV grade
+            #i600 = data[np.argwhere(v==600.),2]*10**6
+            #i850600 = data[np.argwhere(v==850.),2]/data[np.argwhere(v==600.),2]
+            #grade = 'A' if (i600 < 100. and i850600 < 2.5) else ('B' if (i600 < 200. and i850600 < 5.) else 'C')
+            #ax.text(850, 1e-8, f'IV Grade (last curve): {grade}', ha='right', va='center')
+            #ax.text(850, 5e-9, f'I(600V) = {round(data[60,2]*10**6, 2)} $\mu$A', ha='right', va='center')
+            #ax.text(850, 2.5e-9, f'I(850V)/I(600V) = {round(data[85,2]/data[60,2], 3)}', ha='right', va='center')
+            # new
+            i500 = data[np.argwhere(v==500.),2][0][0]*10**6
+            grade = 'A' if (i500 < 100.) else ('B' if (i500 < 1000.) else 'C')
+            ax.text(850, 5e-9, f'IV Grade (last curve): {grade}', ha='right', va='center')
+            ax.text(850, 2.5e-9, rf'I(500V) = {round(i500, 2)} $\mu$A', ha='right', va='center')
+            
+        except Exception:
+            print("  -- InteractionGUI: can't add grading info to IV plot;", traceback.format_exc())
+            
         # dynamically name file to avoid overwriting plots
         filepath = f'{configuration["DataLoc"]}/{outdir}/{state["-Module-Serial-"]}_IVset_{datadict["date"]}'
         filepath += '{}.png'
@@ -871,14 +1104,148 @@ def plot_IV_curves(state):
         plt.close(fig)
         os.system(f'gio open {filepath.format(end)}')
 
+def module_rebond_window(state, unconcells, noisycells):
+
+    try:
+        assert state['-Module-Status-'] in ['Frontside Bonded', 'Completely Bonded', 'Bonds Reworked']
+    except AssertionError:
+        print('  >> DBTools: cannot rebond if not bonded or already encapsulated')
+        return
+
+    layout = [[sg.Text(f"Module {state['-Module-Serial-']} needs bond rework", font=lgfont)],
+              [sg.Button('OK')]]
+
+    if len(unconcells) > 0:
+        layout.insert(-1, [sg.Text(f'Found unbonded cells {unconcells.tolist()}, check bonds', font=lgfont)])
+    if len(noisycells) > 0:
+        layout.insert(-1, [sg.Text(f'Found noisy cells {noisycells.tolist()}, please ground', font=lgfont)])
+        
+    rebond = sg.Window(f"Module {state['-Module-Serial-']} needs bond rework", layout, margins=(200,100))
+
+    event, values = rebond.read(timeout=10)
+
+    while True:
+        event, values = rebond.read(timeout=1)
+        if event == 'OK' or event == sg.WIN_CLOSED:
+            break
+
+    rebond.close()
+        
+def grade_module(moduleserial):
+
+    unconcells, deadcells, noisycells, groundedcells, badcell, badfrac = readout_info(moduleserial)
+    #i_600v, i_850v = iv_info(moduleserial)                                                                                                                                           
+    i_500v = iv_info(moduleserial)
+    pthickness, pflatness, pxoffset, pyoffset, pangoffset, mthickness, mflatness, mxoffset, myoffset, mangoffset = assembly_info(moduleserial)
+    
+    comments = fetch_comments(moduleserial)
+
+    # four individual grades
+    # last updated 2025/4/7 by adapting https://indico.cern.ch/event/1523208/contributions/6408499/attachments/3034525/5358749/ModuleProdNumbers_Mar19_2025.pdf
+    final_grade_def = '2025/4/7 https://indico.cern.ch/event/1523208/contributions/6408499/attachments/3034525/5358749/ModuleProdNumbers_Mar19_2025.pdf'
+    proto_grade_def = 'grade A: xy offsets < 100 um, ang offset < 0.02 deg; grade B: xy offsets < 200 um, ang offset < 0.04 deg; grade C otherwise'
+    module_grade_def = 'grade A: xy offsets < 100 um, ang offset < 0.02 deg; grade B: xy offsets < 250 um, ang offset < 0.06 deg; grade C otherwise'
+    readout_grade_def = 'grade A: bad channel fraction < 2%; grade B: bad channel fraction < 4%; grade C otherwise'
+    iv_grade_def = 'grade A: I(500V) < 100uA; grade B: I(500V) < 1mA; grade C otherwise'
+    # grade_f_criteria?
+    if i_500v < 1e-4:
+        iv_grade = 'A'
+    elif i_500v < 1e-3:
+        iv_grade = 'B'
+    else:
+        iv_grade = 'C'
+
+    if badfrac < 0.02:
+        readout_grade = 'A'
+    elif badfrac < 0.04:
+        readout_grade = 'B'
+    else:
+        readout_grade = 'C'
+
+    if abs(pxoffset) < 100 and abs(pyoffset) < 100 and abs(pangoffset) < 0.02:
+        proto_grade = 'A'
+    elif abs(pxoffset) < 200 and abs(pyoffset) < 200 and abs(pangoffset) < 0.04:
+        proto_grade = 'B'
+    else:
+        proto_grade = 'C'
+
+    if abs(mxoffset) < 100 and abs(myoffset) < 100 and abs(mangoffset) < 0.02:
+        module_grade = 'A'
+    elif abs(mxoffset) < 250 and abs(myoffset) < 250 and abs(mangoffset) < 0.06:
+        module_grade = 'B'
+    else:
+        module_grade = 'C'
+
+    # determine overall grade = minimum indiv grade                                                                                                                                       
+    grade_list = [iv_grade, readout_grade, proto_grade, module_grade]
+    if grade_list.count('A') == 4:
+        final_grade = 'A'
+    elif grade_list.count('C') == 0:
+        final_grade = 'B'
+    else:
+        final_grade = 'C'
+
+    # pop-up window to show grade and display plots                                                                                                                                       
+    # just show grade for now                                                                                                                                                             
+    qc_summary = {'module_name': serial_remove_dashes(moduleserial),
+                  'final_grade': final_grade,
+                  'final_grade_def': final_grade_def,
+                  'proto_flatness': pflatness,
+                  'proto_ave_thickness': pthickness,
+                  'proto_x_offset': pxoffset,
+                  'proto_y_offset': pyoffset,
+                  'proto_ang_offset': pangoffset,
+                  'proto_grade': proto_grade,
+                  'proto_grade_def': proto_grade_def,
+                  'module_flatness': mflatness,
+                  'module_ave_thickness': mthickness,
+                  'module_x_offset': mxoffset,
+                  'module_y_offset': myoffset,
+                  'module_ang_offset': mangoffset,
+                  'module_grade': module_grade,
+                  'module_grade_def': module_grade_def,
+                  'module_weight': None,
+                  'count_back_unbonded': None,
+                  'front_pull_avg': None,
+                  'front_pull_std': None,
+                  'list_cells_unbonded': unconcells,
+                  'list_cells_grounded': groundedcells,
+                  'count_bad_cells': len(badcell),
+                  'list_noisy_cells': noisycells,
+                  'list_dead_cells': deadcells,
+                  'readout_grade': readout_grade,
+                  'readout_grade_def': readout_grade_def,
+                  #'i_at_600v': i_500v,
+                  #'i_ratio_850v_600v': i_850v/i_600v,
+                  'ref_volt_a': 500,
+                  'ref_volt_b': 1e10, # not taking IV past 500V
+                  'i_at_ref_a': i_500v,
+                  'i_ratio_ref_b_over_a': 1e10, # not taking IV past 500V
+                  'iv_grade': iv_grade,
+                  'iv_grade_def': iv_grade_def,
+                  #'grade_version': 'preproduction_1_2024-10-16',                                                                                                                         
+                  'comments_all': comments
+                  }
+
+    print(f' >> InteractionGUI: Module {moduleserial}: Grade {final_grade}')
+    qc_summary = grade_module_window(moduleserial, qc_summary)
+    return qc_summary
+    
 def grade_module_window(moduleserial, qc_summary):
 
+    #print(qc_summary)
+    comments = qc_summary['comments_all']
+    commentstr = '\n'.join(['\n'.join(comments[i]) for i in range(len(comments))])
+    # temporary
+    # commentstr += '\nqc field i_at_600v is actually at 500V'
+    
     layout = [[sg.Text(f'Module {moduleserial}', font=lgfont)], 
               [sg.Text('Grade: ', font=lgfont), sg.Text(qc_summary['final_grade'], font=('Arial', 3*int(configuration['DefaultFontSize'])))],
               [sg.Text(f'Readout Grade: {qc_summary["readout_grade"]}')],
-              [sg.Text(f'{qc_summary["count_bad_cells"]} bad cells; grounded {len(qc_summary["list_cells_grounded"])} cells')],
+              [sg.Text(f'{len(qc_summary["list_dead_cells"])} dead; {len(qc_summary["list_cells_unbonded"])} unbonded; {len(qc_summary["list_noisy_cells"])} noisy; {len(qc_summary["list_cells_grounded"])} grounded; {qc_summary["count_bad_cells"]} total bad cells')],
               [sg.Text(f'IV Grade: {qc_summary["iv_grade"]}')],
-              [sg.Text(f'I(600V) = {round(qc_summary["i_at_600v"]*1e6, 3)}uA, I(850V)/I(600V) = {round(qc_summary["i_ratio_850v_600v"], 3)}')],
+              #[sg.Text(f'I(600V) = {round(qc_summary["i_at_600v"]*1e6, 3)}uA, I(850V)/I(600V) = {round(qc_summary["i_ratio_850v_600v"], 3)}')],
+              [sg.Text(f'I({qc_summary["ref_volt_a"]}V) = {round(qc_summary["i_at_ref_a"]*1e6, 3)}uA')],
               [sg.Text(f'Protomodule Assembly Grade: {qc_summary["proto_grade"]}')],
               [sg.Text(f'Offsets: x: {qc_summary["proto_x_offset"]} um y: {qc_summary["proto_y_offset"]} um ang: {round(qc_summary["proto_ang_offset"], 4)} deg')],
               [sg.Text(f'Module Assembly Grade: {qc_summary["module_grade"]}')],
@@ -888,6 +1255,10 @@ def grade_module_window(moduleserial, qc_summary):
               [sg.Button('Enter')]]
     window = sg.Window(f"Grade Module {moduleserial}", layout, margins=(200,100))
 
+    event, values = window.read(timeout=10)
+    window['comments'].update(value=commentstr)
+    event, values = window.read(timeout=10)
+    
     comment = ''
     while True:
         event, values = window.read()

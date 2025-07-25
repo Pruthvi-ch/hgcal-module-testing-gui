@@ -17,34 +17,49 @@ listeddevices = {'LF': [['00: -- -- -- -- -- -- -- -- 08 09 0a 0b 0c 0d 0e 0f', 
                         ['50: -- -- -- -- -- -- -- -- 58 59 5a 5b 5c 5d 5e 5f', '50: -- -- -- -- -- -- -- 57 58 59 5a 5b 5c 5d 5e 5f']],
                  'LL': [['40: -- -- -- -- -- -- -- -- 48 49 4a 4b 4c 4d 4e 4f', '40: -- -- -- -- -- -- -- 47 48 49 4a 4b 4c 4d 4e 4f'],
                         ['50: -- -- -- -- -- -- -- -- 58 59 5a 5b 5c 5d 5e 5f', '50: -- -- -- -- -- -- -- 57 58 59 5a 5b 5c 5d 5e 5f']],
+                 'LT': [['40: -- -- -- -- -- -- -- -- 48 49 4a 4b 4c 4d 4e 4f', '40: -- -- -- -- -- -- -- 47 48 49 4a 4b 4c 4d 4e 4f'],
+                        ['50: -- -- -- -- -- -- -- -- 58 59 5a 5b 5c 5d 5e 5f', '50: -- -- -- -- -- -- -- 57 58 59 5a 5b 5c 5d 5e 5f']],
+                 'LB': [['40: -- -- -- -- -- -- -- -- 48 49 4a 4b 4c 4d 4e 4f', '40: -- -- -- -- -- -- -- 47 48 49 4a 4b 4c 4d 4e 4f'],
+                        ['50: -- -- -- -- -- -- -- -- 58 59 5a 5b 5c 5d 5e 5f', '50: -- -- -- -- -- -- -- 57 58 59 5a 5b 5c 5d 5e 5f']],
+                 'L5': [['40: -- -- -- -- -- -- -- -- 48 49 4a 4b 4c 4d 4e 4f', '40: -- -- -- -- -- -- -- 47 48 49 4a 4b 4c 4d 4e 4f'],
+                        ['50: -- -- -- -- -- -- -- -- 58 59 5a 5b 5c 5d 5e 5f', '50: -- -- -- -- -- -- -- 57 58 59 5a 5b 5c 5d 5e 5f'],
+                        ['60: -- -- -- -- -- -- -- -- 68 69 6a 6b 6c 6d 6e 6f', '60: -- -- -- -- -- -- -- 67 68 69 6a 6b 6c 6d 6e 6f']],
                  'HF': [['00: -- -- -- -- -- -- -- -- 08 09 0a 0b 0c 0d 0e 0f', '00: -- -- -- -- -- -- -- 07 08 09 0a 0b 0c 0d 0e 0f'],
                         ['10: -- -- -- -- -- -- -- -- 18 19 1a 1b 1c 1d 1e 1f', '10: -- -- -- -- -- -- -- 17 18 19 1a 1b 1c 1d 1e 1f'],
                         ['20: -- -- -- -- -- -- -- -- 28 29 2a 2b 2c 2d 2e 2f', '20: -- -- -- -- -- -- -- 27 28 29 2a 2b 2c 2d 2e 2f'],
                         ['40: -- -- -- -- -- -- -- -- 48 49 4a 4b 4c 4d 4e 4f', '40: -- -- -- -- -- -- -- 47 48 49 4a 4b 4c 4d 4e 4f'],
                         ['50: -- -- -- -- -- -- -- -- 58 59 5a 5b 5c 5d 5e 5f', '50: -- -- -- -- -- -- -- 57 58 59 5a 5b 5c 5d 5e 5f'],
                         ['60: -- -- -- -- -- -- -- -- 68 69 6a 6b 6c 6d 6e 6f', '60: -- -- -- -- -- -- -- 67 68 69 6a 6b 6c 6d 6e 6f']],
+                 'HL': [['00: -- -- -- -- -- -- -- -- 08 09 0a 0b 0c 0d 0e 0f', '00: -- -- -- -- -- -- -- 07 08 09 0a 0b 0c 0d 0e 0f'],
+                        ['10: -- -- -- -- -- -- -- -- 18 19 1a 1b 1c 1d 1e 1f', '10: -- -- -- -- -- -- -- 17 18 19 1a 1b 1c 1d 1e 1f']],
+                 'HR': [['00: -- -- -- -- -- -- -- -- 08 09 0a 0b 0c 0d 0e 0f', '00: -- -- -- -- -- -- -- 07 08 09 0a 0b 0c 0d 0e 0f'],
+                        ['10: -- -- -- -- -- -- -- -- 18 19 1a 1b 1c 1d 1e 1f', '10: -- -- -- -- -- -- -- 17 18 19 1a 1b 1c 1d 1e 1f']],
+                 'HT': [['10: -- -- -- -- -- -- -- -- 18 19 1a 1b 1c 1d 1e 1f', '10: -- -- -- -- -- -- -- 17 18 19 1a 1b 1c 1d 1e 1f'],
+                        ['20: -- -- -- -- -- -- -- -- 28 29 2a 2b 2c 2d 2e 2f', '20: -- -- -- -- -- -- -- 27 28 29 2a 2b 2c 2d 2e 2f'],
+                        ['50: -- -- -- -- -- -- -- -- 58 59 5a 5b 5c 5d 5e 5f', '50: -- -- -- -- -- -- -- 57 58 59 5a 5b 5c 5d 5e 5f']],
                  'HB': [['20: -- -- -- -- -- -- -- -- 28 29 2a 2b 2c 2d 2e 2f', '20: -- -- -- -- -- -- -- 27 28 29 2a 2b 2c 2d 2e 2f'],
                         ['60: -- -- -- -- -- -- -- -- 68 69 6a 6b 6c 6d 6e 6f', '60: -- -- -- -- -- -- -- 67 68 69 6a 6b 6c 6d 6e 6f'],
                         ['10: -- -- -- -- -- -- -- -- 18 19 1a 1b 1c 1d 1e 1f', '10: -- -- -- -- -- -- -- 17 18 19 1a 1b 1c 1d 1e 1f'],
                         ['50: -- -- -- -- -- -- -- -- 58 59 5a 5b 5c 5d 5e 5f', '50: -- -- -- -- -- -- -- 57 58 59 5a 5b 5c 5d 5e 5f']]}
 
 
-class TrenzTestStand:
+class FPGATestStand:
     """
-    Class that wraps the Trenz-based testing system. The class connects to the Trenz using a paramiko
+    Class that wraps the Trenz- or Kria-based testing system. The class connects to the FPGA using a paramiko
     SSH client and then runs commands over ssh.
     """
    
-    def __init__(self, hostname, modulename, keyloc=configuration['PCKeyLoc']):
+    def __init__(self, hostname, modulename, fpgatype='Trenz', keyloc=configuration['PCKeyLoc']):
         """
-        Instantiates object. Can run as soon as Trenz is powered; will wait until ping succeeds to try 
+        Instantiates object. Can run as soon as FPGA is powered; will wait until ping succeeds to try 
         to connect. Some issues with this that are being debugged.
         """
     
         self.fwloaded = False
         self.services = False
         self.hostname = hostname
-        print(f' >> TrenzTestStand: Connecting to Trenz at {self.hostname}...')
+        self.fpgatype = fpgatype
+        print(f' >> FPGATestStand: Connecting to FPGA at {self.hostname}...')
 
         time.sleep(2)
         
@@ -66,30 +81,37 @@ class TrenzTestStand:
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh.connect(hostname=hostname, username='root', pkey=k)
         # at this point, can consider to be "connected"
-        print(' >> TrenzTestStand: Connected')
+        print(' >> FPGATestStand: Connected')
 
         density = modulename.split('-')[1][1]
         shape = modulename.split('-')[2][0]
         self.fw = ''
         if density == 'L':
-            if shape in ['F', 'L', 'R']:
+            if self.fpgatype == 'Trenz':
+                self.fw = 'hexaboard-hd-tester-v1p1-trophy-v3'
+            elif self.fpgatype == 'Kria':
                 self.fw = 'hexaboard-hd-tester-v2p0-trophy-v3'
-            else: # T B 5
-                raise NotImplementedError
         elif density == 'H':
-            if shape == 'F' or shape == 'B':
+            if self.fpgatype == 'Trenz':
+                self.fw = 'hexaboard-hd-tester-v1p1-trophy-v2'
+            elif self.fpgatype == 'Kria':
                 self.fw = 'hexaboard-hd-tester-v2p0-trophy-v2'
-            else: # L R T 5
-                raise NotImplementedError
 
         self.hbtype = density+shape
-            
+
+        if density == 'L':
+            if shape not in ['F', 'L', 'R', 'T', 'B', '5']:
+                raise NotImplementedError
+        elif density == 'H':
+            if shape not in ['F', 'B', 'T', 'L', 'R']:
+                raise NotImplementedError
+        
     def _runcmd(self, cmd):
         """
         Class to run an arbitrary bash command over ssh. Currently sleeps for three seconds to ensure safety.
         """
 
-        print(' >> TrenzTestStand:', cmd)
+        print(' >> FPGATestStand:', cmd)
         ssh_stdin, ssh_stdout, ssh_stderr = self.ssh.exec_command(cmd)
         time.sleep(3)
         ssh_stdin.close()
@@ -104,39 +126,44 @@ class TrenzTestStand:
         Returns True if proper startup detected, otherwise returns False.
         """
 
-        ssh_stdout, ssh_stderr = self._runcmd(f'kconn_pwr on')
-        stdout = ssh_stdout.read().decode('ascii')
+        # activate gpio lines
+        if self.fpgatype == 'Kria':
+            ssh_stdout, ssh_stderr = self._runcmd(f'kconn_pwr on')
+            stdout = ssh_stdout.read().decode('ascii')
 
-        for line in stdout.split('\n'):
-            print('   >> fw:', line)
-
-        ssh_stdout, ssh_stderr = self._runcmd(f'firewall-cmd --add-port=5555/tcp --add-port=6000/tcp --add-port=8888/tcp --add-port=8080/tcp')
-        stdout = ssh_stdout.read().decode('ascii')
-
-        for line in stdout.split('\n'):
-            print('   >> fw:', line)
-
-        ssh_stdout, ssh_stderr = self._runcmd(f'fw-loader load {self.fw} && listdevice')
+        # load firmware
+        ssh_stdout, ssh_stderr = self._runcmd(f'fw-loader load {self.fw}')
         stdout = ssh_stdout.read().decode('ascii')
 
         firmware_loaded = False
-        channels_found = True
         
         for line in stdout.split('\n'):
             print('   >> fw:', line)
 
         # check fw load
         if 'Loaded the device tree overlay successfully using the zynqMP FPGA manager' in stdout:
-            print(' >> TrenzTestStand: Loaded firmware')
+            print(' >> FPGATestStand: Loaded firmware')
             firmware_loaded = True
 
-        # check channels in listdevice
-        for addressbar in listeddevices[self.hbtype]:
-            if addressbar[0] not in stdout and addressbar[1] not in stdout:
-                channels_found = False
+        for i in range(3):    
+            ssh_stdout, ssh_stderr = self._runcmd(f'listdevice')
+            stdout = ssh_stdout.read().decode('ascii')
+            
+            channels_found = True
 
-        if channels_found:
-            print(' >> TrenzTestStand: Discovered ROC channels')
+            # check channels in listdevice
+            for addressbar in listeddevices[self.hbtype]:
+                if addressbar[0] not in stdout and addressbar[1] not in stdout:
+                    channels_found = False
+
+            if channels_found:
+                print(' >> FPGATestStand: Discovered ROC channels')
+                break
+
+        if not channels_found:
+            print(' -- FPGATestStand: unable to find ROC channels in listdevice')
+            return False
+                
 
         if firmware_loaded and channels_found:
             self.fwloaded = True
@@ -147,7 +174,7 @@ class TrenzTestStand:
     
     def startservers(self):
         """
-        Starts the DAQ and I2C servers on the Trenz and then checks their status to ensure proper instantiation. Returns True if proper startup
+        Starts the DAQ and I2C servers on the FPGA and then checks their status to ensure proper instantiation. Returns True if proper startup
         detected, otherwise returns False.
         """
 
@@ -177,7 +204,7 @@ class TrenzTestStand:
         if check1 and check2:
             daq_initiated = True
         if daq_initiated:
-            print(' >> TrenzTestStand: DAQ server initiated')
+            print(' >> FPGATestStand: DAQ server initiated')
         
         ssh_stdout, ssh_stderr = self._runcmd('systemctl status i2c-server.service')    
         board_discovered = False
@@ -196,17 +223,28 @@ class TrenzTestStand:
         if check1:
             board_discovered = True
         if board_discovered:
-            print(' >> TrenzTestStand: Identified Hexaboard')
+            print(' >> FPGATestStand: Identified Hexaboard')
 
+        if self.fpgatype == 'Kria':
+            print(self.fpgatype, 'adding to firewall')
+            ssh_stdout, ssh_stderr = self._runcmd('firewall-cmd --add-port=5555/tcp --add-port=6000/tcp --add-port=8888/tcp --add-port=8080/tcp')
+            for line in ssh_stdout.readlines():
+                print(line)
+            for line in ssh_stderr.readlines():
+                print(line)
+
+            
         if board_discovered and daq_initiated and error_check:
             self.services = True
-            print(' >> TrenzTestStand: Started services successfully')
+            print(' >> FPGATestStand: Started services successfully')
             return True
         else:
             self.services = False
-            print(' -- TrenzTestStand: Error in starting services')
+            print(' -- FPGATestStand: Error in starting services')
             return False
 
+
+            
     def statusservers(self):
         """
         Check status of DAQ and I2C servers. Returns status of servers as a 2-length tuple.
@@ -244,10 +282,10 @@ class TrenzTestStand:
                 i2c_running = True
 
         if daq_running and  i2c_running:
-            print(' >> TrenzTestStand: Services up and running')
+            print(' >> FPGATestStand: Services up and running')
             self.services = True
         else:
-            print(f' -- TrenzTestStand: Services not running: DAQ {daq_running} I2C {i2c_running}')
+            print(f' -- FPGATestStand: Services not running: DAQ {daq_running} I2C {i2c_running}')
             self.services = False
         return daq_running, i2c_running
 
@@ -257,13 +295,10 @@ class TrenzTestStand:
 
     def shutdown(self):
         """
-        Shuts the Trenz down remotely. Tested many times and works properly.
+        Shuts the FPGA down remotely. Tested many times and works properly.
         """
 
-        print(' >> TrenzTestStand: Shutting down the Trenz test stand')
-        ssh_stdout, ssh_stderr = self._runcmd(f'kconn_pwr off')
-        time.sleep(1)
-
-        ssh_stdout, ssh_stderr = self._runcmd(f'init 0')
+        print(' >> FPGATestStand: Shutting down the FPGA test stand')
+        ssh_stdout, ssh_stderr = self._runcmd('shutdown now')
         time.sleep(5)
         return ssh_stdout.readlines(), ssh_stderr.readlines()
