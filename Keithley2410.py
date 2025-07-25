@@ -53,7 +53,7 @@ class Keithley2470:
         # User-editable default parameters below:
         self._channel = 1  # Default channel is 1, on rear of device
         self._wait_time_s = 0.1  # Wait time in seconds
-        self._ilimit = 1.5e-3  # Current limit in A - now 1.5 mA
+        self._ilimit = 5e-3  # Current limit in A - now 1.5 mA
         self._vlimit = 921  # Voltage limit in V - 921 to configure sweep to 900 correctly
         self._sense_mode = "current"
         self._elements = ["voltage", "current", "resistance", "time", "status"]
@@ -96,8 +96,8 @@ class Keithley2470:
         # store all IV curves since this class was created
         self.IVdata = []
 
-        self.bv_ramp_step = 25.
-        self.bv_ramp_wait = 0.5
+        self.bv_ramp_step = 50.   # 25 old value
+        self.bv_ramp_wait = 0.5   # 0.5 old 
 
 
     def __del__(self):
@@ -292,7 +292,7 @@ class Keithley2470:
     def set_source_current_mode(self, mode):
         """Sets the source mode to current with the defined mode.
         Options are fixed, list, or sweep.
-        """
+        """#vltg = [50, 100, 150, 200
         self._write(f"SOURce{self._channel}:FUNCtion CURRent")
         if mode == "fixed":
             self._write(f"SOURce{self._channel}:CURRent:MODE FIXed")
@@ -319,7 +319,10 @@ class Keithley2470:
                     this_voltage = self.voltage_now + self.bv_ramp_step*i*copysign(1, difference)
                     self._write(f"SOURce:VOLTage {this_voltage}")
                     sleep(self.bv_ramp_wait)
-
+            self.voltage_now = value
+            self._write(f"SOURce:VOLTage {value}")
+        else:
+            raise ValueError("Invalid set voltage")     
 
     def setVoltage(self, value):
         """Renaming of above function for compatibility
@@ -345,10 +348,11 @@ class Keithley2470:
         elif mode == "current":
             self._sense_mode = mode
             self._write(f"SENSe{self._channel}:FUNCtion:ON 'CURRent:DC'")
-            if not self.high_i_range:
-                self._write(f"SENSe{self._channel}:CURRent:DC:RANG 100E-6")
-            else:
-                self._write(f"SENSe{self._channel}:CURRent:DC:RANG 1E-3")
+            #if not self.high_i_range:
+            #    self._write(f"SENSe{self._channel}:CURRent:DC:RANG 100E-6")
+            #else:
+            #    self._write(f"SENSe{self._channel}:CURRent:DC:RANG 1E-3")
+            self._write(f"SENSe{self._channel}:CURRent:DC:RANGe:AUTO ON")
         else:
             raise ValueError("Invalid sense mode")
 
@@ -372,19 +376,21 @@ class Keithley2470:
         """
         if self._sense_mode != "current":
             self.set_sense_mode("current")
-        #self._write("CONFigure:CURRent:DC")
+        self._write("CONFigure:CURRent:DC")
         # reconfigure to disable auto-ranging
-        if not self.high_i_range:
-            self._write(f"SENSe:CURRent:DC:RANG 100E-6")
-        else:
-            self._write(f"SENSe:CURRent:DC:RANG 1E-3")
+        #if not self.high_i_range:
+        #    self._write(f"SENSe:CURRent:DC:RANG 100E-6")
+        #else:
+        #    self._write(f"SENSe:CURRent:DC:RANG 1E-3")
 
-
+        self._write(f"SENSe:CURRent:DC:RANG:AUTO ON")
         start = time()
         while True:
             measurement = self._query("READ?", 0.)
             if time() - start >= 3.:
                 break
+
+        #measurement = self._query("MEASure:CURRent:DC?")    
         measurement = self._query("READ?", 0.)
         #print("Measured  " , self._parse_data(measurement)[0]['current'])
         return float(measurement)
@@ -401,13 +407,14 @@ class Keithley2470:
             self.set_sense_mode("current")
         #self._write("CONFigure:CURRent:DC")
         # reconfigure to disable auto-ranging
-        if not self.high_i_range:
-            self._write(f"SENSe:CURRent:DC:RANG 100E-6")
-        else:
-            self._write(f"SENSe:CURRent:DC:RANG 1E-3")
+        #if not self.high_i_range:
+        #    self._write(f"SENSe:CURRent:DC:RANG 100E-6")
+        #else:
+        #    self._write(f"SENSe:CURRent:DC:RANG 1E-3")
+        self._write(f"SENSe{self._channel}:CURRent:DC:RANGe:AUTO ON")
 
         start = time()
-        maxtime = 30.
+        maxtime = 40.
         q = deque(maxlen=5)
 
         # repetetively query current measurement
@@ -417,13 +424,13 @@ class Keithley2470:
             thiscurrent = float(measurement)
             q.append(thiscurrent)
 
-            if thiscurrent > (50. * 10**(-6)) and not self.high_i_range:
-                self._write(f"SENSe:CURRent:DC:RANG 1E-3")
-                self.high_i_range = True
-            if thiscurrent < (20. * 10**(-6)) and self.high_i_range:
-                self._write(f"SENSe:CURRent:DC:RANG 100E-6")
-                self.high_i_range = False
-
+           # if thiscurrent > (50. * 10**(-6)) and not self.high_i_range:
+           #     self._write(f"SENSe:CURRent:DC:RANG 1E-3")
+           #     self.high_i_range = True
+           # if thiscurrent < (20. * 10**(-6)) and self.high_i_range:
+           #     self._write(f"SENSe:CURRent:DC:RANG 100E-6")
+           #     self.high_i_range = False
+            self._write(f"SENSe{self._channel}:CURRent:DC:RANGe:AUTO ON")
             # check if current measurement has stabilized
             if len(q) >= 5 and ((np.max(np.array(q)) - np.min(np.array(q))) <= 0.2 * 10**(-6)):
                 break
@@ -470,6 +477,7 @@ class Keithley2470:
 
             self.display_string("Sweep complete.")
 
+            mycurr = keithley.current   
             return sweep_data
         else:
             raise ValueError("Voltage range out of bounds")
@@ -484,7 +492,7 @@ class Keithley2470:
         time = current_date.isoformat().split('T')[1].split('.')[0]
 
         steps = int(Vmax//step)
-        ivdata = self.voltage_sweep(0.001, Vmax, steps, delay_s=5.)
+        ivdata = self.voltage_sweep(1, Vmax, steps, delay_s=5.)
 
         temparray = [[i*step, float(ivdata[i]['voltage']), float(ivdata[i]['current']), float(ivdata[i]['resistance'])] for i in range(len(ivdata))]
 
@@ -527,6 +535,7 @@ class Keithley2470:
     # Storing/plotting curve handled elsewhere
     def takeIVnew(self, maxV, stepV, RH, Temp, errcheck_step=5):
 
+        timeout=80000
         self.setVoltage(0.)
         self.outputOn()
 
@@ -545,14 +554,19 @@ class Keithley2470:
         # Count the number of measurements that hit current compliance
         # Break the loop after the second to save time
         compl_ctr = 0
-        for i in range(0, ln):
+        #vltg= [100, 200, 300, 400, 500, 600, 700, 800, 900]
+        for i in range(1, ln):
+        #for i in range(9):    
             if i % errcheck_step == 0:
                 self.check_for_errors(1) # Periodically check Keithley error cache
 
             vltg = i*stepV
+            #vol = vltg[i]
+            #print("the voltage is ", vol)
             self.setVoltage(vltg)
             # Delay here doesn't work for some reason
             # maybe because the Keithley isn't in measure mode?
+            sleep(30)
             _, current, _ = self.measureCurrentLoop()
             voltage, _, _ = self.measureVoltage()
             resistance = voltage / current
@@ -569,7 +583,7 @@ class Keithley2470:
         print(' >> Keithley2410: Disabling output')
         self.setVoltage(0.)
         self.outputOff()
-
+  
         return datadict
 
 
@@ -932,18 +946,19 @@ class Keithley2410:
             self.set_sense_mode("current")
         self._write("CONFigure:CURRent:DC")
         # reconfigure to disable auto-ranging
-        if not self.high_i_range:
-            self._write(f"SENSe{self._channel}:CURRent:DC:RANG 100E-6")
-        else:
-            self._write(f"SENSe{self._channel}:CURRent:DC:RANG 1E-3")
+        #if not self.high_i_range:
+        #    self._write(f"SENSe{self._channel}:CURRent:DC:RANG 100E-6")
+        #else:
+        #    self._write(f"SENSe{self._channel}:CURRent:DC:RANG 1E-3")
         
         
-        start = time()
-        while True:
-            measurement = self._query("READ?", 0.)
-            if time() - start >= 3.:
-                break
-        measurement = self._query("READ?", 0.)
+        #start = time()
+        #while True:
+        #    measurement = self._query("READ?", 0.)
+        #    if time() - start >= 3.:
+        #        break
+        measurement = self._query("MEASure:CURRent:DC?")
+        #measurement = self._query("READ?", 0.)
         return float(self._parse_data(measurement)[0]['current'])
 
     def measureCurrent(self):
@@ -1037,7 +1052,7 @@ class Keithley2410:
         time = current_date.isoformat().split('T')[1].split('.')[0]
 
         steps = int(Vmax//step)
-        ivdata = self.voltage_sweep(0, Vmax, steps, delay_s=5.)
+        ivdata = self.voltage_sweep(0.1, Vmax, steps, delay_s=5.)
         
         temparray = [[i*step, float(ivdata[i]['voltage']), float(ivdata[i]['current']), float(ivdata[i]['resistance'])] for i in range(len(ivdata))]
 
@@ -1107,7 +1122,7 @@ class Keithley2410:
             self.setVoltage(vltg)
             # Delay here doesn't work for some reason
             # maybe because the Keithley isn't in measure mode?
-            _, current, _ = self.measureCurrentLoop()
+            _, current, _ = self.measureCurrent()
             voltage, _, _ = self.measureVoltage()
             resistance = voltage / current
 

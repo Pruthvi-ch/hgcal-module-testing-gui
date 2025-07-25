@@ -741,7 +741,7 @@ def scan_vref(state, BV):
         state['pc'].vrefinv_scan()
     vref.close()
 
-def take_IV_curve(state, step=100):
+def take_IV_curve(state, step=25):
     """
     Takes an IV curve automatically using the power supply object. The range is assumed to be 0-900V
     and the default step is 20V. If the RH argument is not zero, it prompts the user to enter the ambient
@@ -762,7 +762,7 @@ def take_IV_curve(state, step=100):
             print(' >> HV switch not tripped - exiting. Please close box and try again.')
             return 'END'
         update_state(state, '-HV-Output-On-', True, 'green')
-        maxV = 900 if configuration['HVWiresPolarization'] == 'Reverse' else -900
+        maxV = 600 if configuration['HVWiresPolarization'] == 'Reverse' else -600
         if configuration['HVWiresPolarization'] == 'Forward':
             step = -step
         curve = state['ps'].takeIVnew(maxV, step, RH, Temp) # IV curve is stored in the ps object so all curves can be plotted together
@@ -853,7 +853,7 @@ def plot_IV_curves(state):
         ax.set_title(f'{state["-Module-Serial-"]} module IV Curve Set {datadict["date"]}')
         ax.set_xlabel('Bias Voltage [V]')
         ax.set_ylabel(r'Leakage Current [A]')
-        ax.set_ylim(1e-9, 1e-03)
+        ax.set_ylim(1e-9, 1e-02)
         ax.set_xlim(0, 950)
         ax.legend()
 
