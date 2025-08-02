@@ -12,7 +12,7 @@ configuration = {}
 with open('configuration.yaml', 'r') as file:
     configuration = yaml.safe_load(file)
 
-class Keithley2470:
+class Keithley2410:
     def __init__(self):
         # Initiate and configure PyVISA:
         self._rm = pyvisa.ResourceManager('@py')
@@ -587,7 +587,7 @@ class Keithley2470:
         return datadict
 
 
-class Keithley2410:
+class Keithley2410_actual:
 
     def __init__(self):
         # Initiate and configure PyVISA:

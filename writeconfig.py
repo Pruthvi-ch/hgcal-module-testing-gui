@@ -4,8 +4,9 @@ config_dict = {'DebugMode': True,
                'DefaultFontSize': '15', # 15 works well for 1920x1080 screens
                'TestingPCOpSys': 'Alma9', # or 'Alma9'
                'HexactrlSWBranch': 'ROCv3', # gitlab branch of `hexactrl-sw`, should be 'ROCv3' for most. If you updated to Alma 9 some time ago (but not recently), use 'feature-alma9' instead.
-               'TrenzHostname': ['158.144.54.126'],
-               'MACSerial': 'CM',
+               'FPGAHostname': ['158.144.54.126'], # renamed Trenz->FPGA
+               'FPGAType': ['Kria'], # type of FPGA; order __must__ match 'FPGAHostname'
+               'MACSerial': 'TI',
                'DataLoc': '/home/hgcroc/data/', # place to store all output data
                'HVResource': 'TCPIP::158.144.54.104::5025::SOCKET',
                'HVDiscoveryMode': 'by-resource', # if you use something like the above; use 'by-id' if instead of the /dev/ location you use the link shown by `ls -l /dev/serial/by-id`
@@ -14,8 +15,8 @@ config_dict = {'DebugMode': True,
                'PCKeyLoc': '/home/hgcroc/.ssh/id_rsa', # private key location
                'HasHVSwitch': True, # switch on the box which only allows HV when switch is triggered
                'HasRHSensor': False, # automatic sensing of RH and T inside test box, see AirControl.py. You may want to re-implement it.
-               'Inspectors': ['pruthvi'], # CERN usernames
-               'HasLocalDB': False,
+               'Inspectors': ['lokesh', 'kamesh', 'simon', 'pruthvi'], # CERN usernames
+               'HasLocalDB': True,
                # these four only if you have a local database
                'DBHostname': '158.144.55.183', # fill out
                'DBDatabase': 'hgcdb',
